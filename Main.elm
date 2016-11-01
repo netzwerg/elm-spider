@@ -52,12 +52,18 @@ type Msg
 
 
 type alias Model =
-    { width : Int
-    , height : Int
-    , x : Int
-    , y : Int
-    , points : List ( Float, Float )
+    { dimension : Dimension
+    , spiderCenter : Point
+    , points : List Point
     }
+
+
+type alias Point =
+    { x : Float, y : Float }
+
+
+type alias Dimension =
+    { width : Float, height : Float }
 
 
 main : Program Never
@@ -72,10 +78,8 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { width = 0
-      , height = 0
-      , x = 0
-      , y = 0
+    ( { dimension = Dimension 0 0
+      , spiderCenter = Point 0 0
       , points = []
       }
     , Task.perform Resize Resize Window.size
@@ -102,31 +106,34 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Resize s ->
-            ( { model
-                | width = s.width
-                , height = s.height
-                , points = List.map (scalePoint s.width s.height) randomPoints
-              }
-            , Cmd.none
-            )
+            let
+                dimension =
+                    Dimension (toFloat s.width) (toFloat s.height)
+            in
+                ( { model
+                    | dimension = dimension
+                    , points = List.map (scalePoint dimension) randomPoints
+                  }
+                , Cmd.none
+                )
 
         KeyDown keyCode ->
             ( keyDown keyCode model, Cmd.none )
 
 
-scalePoint : Int -> Int -> ( Float, Float ) -> ( Float, Float )
-scalePoint width height ( x, y ) =
+scalePoint : Dimension -> Point -> Point
+scalePoint dimension point =
     let
-        w =
-            toFloat width
+        x =
+            point.x * dimension.width - (dimension.width / 2)
 
-        h =
-            toFloat height
+        y =
+            point.y * dimension.height - (dimension.height / 2)
     in
-        ( x * w - (w / 2), y * h - (h / 2) )
+        Point x y
 
 
-randomPoints : List ( Float, Float )
+randomPoints : List Point
 randomPoints =
     let
         ( points, _ ) =
@@ -135,39 +142,51 @@ randomPoints =
         points
 
 
-randomPoint : Generator ( Float, Float )
+randomPoint : Generator Point
 randomPoint =
-    pair (float 0 1) (float 0 1)
+    Random.map (\( x, y ) -> Point x y) (pair (float 0 1) (float 0 1))
 
 
 keyDown : KeyCode -> Model -> Model
 keyDown keyCode model =
     let
         halfWidth =
-            round (toFloat model.width / 2)
+            model.dimension.width / 2
 
         halfHeight =
-            round (toFloat model.height / 2)
+            model.dimension.height / 2
+
+        x =
+            model.spiderCenter.x
+
+        y =
+            model.spiderCenter.y
+
+        delta =
+            toFloat pixelsPerArrowPress
+
+        spiderCenter =
+            case keyCode of
+                -- arrow left
+                37 ->
+                    Point (max (x - delta) -halfWidth) y
+
+                -- arrow up
+                38 ->
+                    Point x (min (y + delta) halfHeight)
+
+                -- arrow right
+                39 ->
+                    Point (min (x + delta) halfWidth) y
+
+                -- arrow down
+                40 ->
+                    Point x (max (y - delta) -halfHeight)
+
+                _ ->
+                    Point x y
     in
-        case keyCode of
-            -- arrow left
-            37 ->
-                { model | x = max (model.x - pixelsPerArrowPress) -halfWidth }
-
-            -- arrow up
-            38 ->
-                { model | y = min (model.y + pixelsPerArrowPress) halfHeight }
-
-            -- arrow right
-            39 ->
-                { model | x = min (model.x + pixelsPerArrowPress) halfWidth }
-
-            -- arrow down
-            40 ->
-                { model | y = max (model.y - pixelsPerArrowPress) -halfHeight }
-
-            _ ->
-                model
+        { model | spiderCenter = spiderCenter }
 
 
 
@@ -176,21 +195,33 @@ keyDown keyCode model =
 
 view : Model -> Html Msg
 view model =
-    toHtml <|
-        collage
-            model.width
-            model.height
-            [ filled black <| rect (toFloat model.width) (toFloat model.height)
-            , move ( toFloat model.x, toFloat model.y ) <| filled orange <| circle pointRadius
-            , viewPoints model.width model.height model.points
-            ]
+    let
+        w =
+            model.dimension.width
+
+        h =
+            model.dimension.height
+    in
+        toHtml <|
+            collage
+                (round w)
+                (round h)
+                [ filled black <| rect w h
+                , viewSpiderCenter model.spiderCenter
+                , viewPoints model.points
+                ]
 
 
-viewPoints : Int -> Int -> List ( Float, Float ) -> Form
-viewPoints width height points =
+viewSpiderCenter : Point -> Form
+viewSpiderCenter spiderCenter =
+    move ( spiderCenter.x, spiderCenter.y ) <| filled orange <| circle pointRadius
+
+
+viewPoints : List Point -> Form
+viewPoints points =
     group (List.map viewPoint points)
 
 
-viewPoint : ( Float, Float ) -> Form
-viewPoint ( x, y ) =
-    move ( x, y ) <| filled white <| circle pointRadius
+viewPoint : Point -> Form
+viewPoint point =
+    move ( point.x, point.y ) <| filled white <| circle pointRadius
