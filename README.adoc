@@ -1,0 +1,12 @@
+# Elm Spider
+
+A mezmerizing spider which can be moved via arrow keys or mouse.
+
+https://netzwerg.github.io/elm-spider[Try it]
+
+## Build
+
+```
+elm-make src/Main.elm --output docs/index.html
+open docs/index.html
+```
