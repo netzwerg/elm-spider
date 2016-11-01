@@ -13,6 +13,7 @@ import Keyboard exposing (..)
 import Debug exposing (..)
 import Text exposing (..)
 import Random exposing (..)
+import Mouse exposing (..)
 
 
 -- CONFIG
@@ -45,6 +46,7 @@ pixelsPerArrowPress =
 type Msg
     = Resize Size
     | KeyDown KeyCode
+    | MousePosition Point
 
 
 
@@ -95,6 +97,7 @@ subscriptions =
     Sub.batch
         [ Window.resizes Resize
         , Keyboard.downs KeyDown
+        , Mouse.moves (\{ x, y } -> MousePosition (Point (toFloat x) (toFloat y)))
         ]
 
 
@@ -119,6 +122,18 @@ update msg model =
 
         KeyDown keyCode ->
             ( keyDown keyCode model, Cmd.none )
+
+        MousePosition mousePosition ->
+            let
+                x =
+                    mousePosition.x - model.dimension.width / 2
+
+                y =
+                    model.dimension.height / 2 - mousePosition.y
+            in
+                ( { model | spiderCenter = Point x y }
+                , Cmd.none
+                )
 
 
 scalePoint : Dimension -> Point -> Point
@@ -207,8 +222,8 @@ view model =
                 (round w)
                 (round h)
                 [ filled black <| rect w h
-                , viewSpiderCenter model.spiderCenter
                 , viewPoints model.points
+                , viewSpiderCenter model.spiderCenter
                 ]
 
 
