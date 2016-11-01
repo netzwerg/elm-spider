@@ -26,7 +26,7 @@ seed =
 
 pointCount : Int
 pointCount =
-    100
+    200
 
 
 pointRadius : Float
@@ -37,6 +37,16 @@ pointRadius =
 pixelsPerArrowPress : Int
 pixelsPerArrowPress =
     10
+
+
+defaultLegLength : Float
+defaultLegLength =
+    100
+
+
+legWidth : Float
+legWidth =
+    5
 
 
 
@@ -56,6 +66,7 @@ type Msg
 type alias Model =
     { dimension : Dimension
     , spiderCenter : Point
+    , legLength : Float
     , points : List Point
     }
 
@@ -82,6 +93,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { dimension = Dimension 0 0
       , spiderCenter = Point 0 0
+      , legLength = defaultLegLength
       , points = []
       }
     , Task.perform Resize Resize Window.size
@@ -224,6 +236,7 @@ view model =
                 [ filled black <| rect w h
                 , viewPoints model.points
                 , viewSpiderCenter model.spiderCenter
+                , viewSpiderLegs model.spiderCenter model.legLength model.points
                 ]
 
 
@@ -240,3 +253,37 @@ viewPoints points =
 viewPoint : Point -> Form
 viewPoint point =
     move ( point.x, point.y ) <| filled white <| circle pointRadius
+
+
+viewSpiderLegs : Point -> Float -> List Point -> Form
+viewSpiderLegs spiderCenter legLength points =
+    let
+        legPoints =
+            List.filter (withinLegRange spiderCenter legLength) points
+    in
+        group (List.map (viewSpiderLeg spiderCenter) legPoints)
+
+
+withinLegRange : Point -> Float -> Point -> Bool
+withinLegRange spiderCenter legLength point =
+    let
+        dx =
+            spiderCenter.x - point.x
+
+        dy =
+            spiderCenter.y - point.y
+    in
+        (dx * dx) + (dy * dy) < legLength * legLength
+
+
+viewSpiderLeg : Point -> Point -> Form
+viewSpiderLeg spiderCenter legEnd =
+    let
+        lineStyle =
+            { defaultLine
+                | width = legWidth
+                , color = orange
+                , cap = Round
+            }
+    in
+        segment ( spiderCenter.x, spiderCenter.y ) ( legEnd.x, legEnd.y ) |> traced lineStyle
