@@ -1,8 +1,6 @@
 module Main exposing (..)
 
 import Color exposing (..)
-import Collage exposing (..)
-import Element exposing (toHtml)
 import Html exposing (Html)
 import Html.App exposing (program)
 import Platform.Cmd
@@ -11,12 +9,19 @@ import Task exposing (perform)
 import Window exposing (Size)
 import Keyboard exposing (..)
 import Debug exposing (..)
-import Text exposing (..)
 import Random exposing (..)
 import Mouse exposing (..)
+import Svg exposing (line, g, circle, Svg, svg)
+import Svg.Attributes exposing (..)
+import String exposing (concat)
 
 
 -- CONFIG
+
+
+elmOrange : String
+elmOrange =
+    "#F0AD00"
 
 
 seed : Int
@@ -122,11 +127,18 @@ update msg model =
     case msg of
         Resize s ->
             let
+                w =
+                    toFloat s.width
+
+                h =
+                    toFloat s.height
+
                 dimension =
-                    Dimension (toFloat s.width) (toFloat s.height)
+                    Dimension w h
             in
                 ( { model
                     | dimension = dimension
+                    , spiderCenter = Point (w / 2) (h / 2)
                     , points = List.map (scalePoint dimension) randomPoints
                   }
                 , Cmd.none
@@ -136,26 +148,19 @@ update msg model =
             ( keyDown keyCode model, Cmd.none )
 
         MousePosition mousePosition ->
-            let
-                x =
-                    mousePosition.x - model.dimension.width / 2
-
-                y =
-                    model.dimension.height / 2 - mousePosition.y
-            in
-                ( { model | spiderCenter = Point x y }
-                , Cmd.none
-                )
+            ( { model | spiderCenter = mousePosition }
+            , Cmd.none
+            )
 
 
 scalePoint : Dimension -> Point -> Point
 scalePoint dimension point =
     let
         x =
-            point.x * dimension.width - (dimension.width / 2)
+            point.x * dimension.width
 
         y =
-            point.y * dimension.height - (dimension.height / 2)
+            point.y * dimension.height
     in
         Point x y
 
@@ -177,11 +182,11 @@ randomPoint =
 keyDown : KeyCode -> Model -> Model
 keyDown keyCode model =
     let
-        halfWidth =
-            model.dimension.width / 2
+        w =
+            model.dimension.width
 
-        halfHeight =
-            model.dimension.height / 2
+        h =
+            model.dimension.height
 
         x =
             model.spiderCenter.x
@@ -196,19 +201,19 @@ keyDown keyCode model =
             case keyCode of
                 -- arrow left
                 37 ->
-                    Point (max (x - delta) -halfWidth) y
+                    Point (Basics.max (x - delta) 0) y
 
                 -- arrow up
                 38 ->
-                    Point x (min (y + delta) halfHeight)
+                    Point x (Basics.max (y - delta) 0)
 
                 -- arrow right
                 39 ->
-                    Point (min (x + delta) halfWidth) y
+                    Point (Basics.min (x + delta) w) y
 
                 -- arrow down
                 40 ->
-                    Point x (max (y - delta) -halfHeight)
+                    Point x (Basics.min (y + delta) h)
 
                 _ ->
                     Point x y
@@ -229,39 +234,47 @@ view model =
         h =
             model.dimension.height
     in
-        toHtml <|
-            collage
-                (round w)
-                (round h)
-                [ filled black <| rect w h
-                , viewPoints model.points
-                , viewSpiderCenter model.spiderCenter
-                , viewSpiderLegs model.spiderCenter model.legLength model.points
-                ]
+        svg
+            [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
+            , width "100%"
+            , height "100%"
+              -- prevent scrollbar
+            , style "display: block"
+            ]
+            [ viewPoints model.points
+            , viewSpiderCenter model.spiderCenter
+            , viewSpiderLegs model.spiderCenter model.legLength model.points
+            ]
 
 
-viewSpiderCenter : Point -> Form
+viewSpiderCenter : Point -> Svg msg
 viewSpiderCenter spiderCenter =
-    move ( spiderCenter.x, spiderCenter.y ) <| filled orange <| circle pointRadius
+    viewPoint spiderCenter elmOrange
 
 
-viewPoints : List Point -> Form
+viewPoints : List Point -> Svg msg
 viewPoints points =
-    group (List.map viewPoint points)
+    g [] (List.map (flip viewPoint "black") points)
 
 
-viewPoint : Point -> Form
-viewPoint point =
-    move ( point.x, point.y ) <| filled white <| circle pointRadius
+viewPoint : Point -> String -> Svg msg
+viewPoint point color =
+    circle
+        [ cx (toString point.x)
+        , cy (toString point.y)
+        , r (toString pointRadius)
+        , fill color
+        ]
+        []
 
 
-viewSpiderLegs : Point -> Float -> List Point -> Form
+viewSpiderLegs : Point -> Float -> List Point -> Svg msg
 viewSpiderLegs spiderCenter legLength points =
     let
         legPoints =
             List.filter (withinLegRange spiderCenter legLength) points
     in
-        group (List.map (viewSpiderLeg spiderCenter) legPoints)
+        g [] (List.map (viewSpiderLeg spiderCenter) legPoints)
 
 
 withinLegRange : Point -> Float -> Point -> Bool
@@ -276,14 +289,15 @@ withinLegRange spiderCenter legLength point =
         (dx * dx) + (dy * dy) < legLength * legLength
 
 
-viewSpiderLeg : Point -> Point -> Form
+viewSpiderLeg : Point -> Point -> Svg msg
 viewSpiderLeg spiderCenter legEnd =
-    let
-        lineStyle =
-            { defaultLine
-                | width = legWidth
-                , color = orange
-                , cap = Round
-            }
-    in
-        segment ( spiderCenter.x, spiderCenter.y ) ( legEnd.x, legEnd.y ) |> traced lineStyle
+    line
+        [ x1 (toString spiderCenter.x)
+        , y1 (toString spiderCenter.y)
+        , x2 (toString legEnd.x)
+        , y2 (toString legEnd.y)
+        , stroke elmOrange
+        , strokeWidth (toString legWidth)
+        , strokeLinecap "round"
+        ]
+        []
