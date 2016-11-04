@@ -31,7 +31,7 @@ seed =
 
 pointCount : Int
 pointCount =
-    200
+    300
 
 
 pointRadius : Float
@@ -69,7 +69,7 @@ type Msg
 
 
 type alias Model =
-    { dimension : Dimension
+    { screen : Dimension
     , spiderCenter : Point
     , legLength : Float
     , points : List Point
@@ -96,13 +96,28 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { dimension = Dimension 0 0
+    ( { screen = Dimension 0 0
       , spiderCenter = Point 0 0
       , legLength = defaultLegLength
-      , points = []
+      , points = randomPoints
       }
     , Task.perform Resize Resize Window.size
     )
+
+
+randomPoints : List Point
+randomPoints =
+    let
+        ( points, _ ) =
+            step (list pointCount randomPoint) (initialSeed seed)
+    in
+        points
+
+
+randomPoint : Generator Point
+randomPoint =
+    -- points are normalized between 0 and 1 --> scaled to screen upon rendering
+    Random.map (\( x, y ) -> Point x y) (pair (float 0 1) (float 0 1))
 
 
 
@@ -133,19 +148,20 @@ update msg model =
                 h =
                     toFloat s.height
 
-                dimension =
+                screen =
                     Dimension w h
             in
                 ( { model
-                    | dimension = dimension
+                    | screen = screen
                     , spiderCenter = Point (w / 2) (h / 2)
-                    , points = List.map (scalePoint dimension) randomPoints
                   }
                 , Cmd.none
                 )
 
         KeyDown keyCode ->
-            ( keyDown keyCode model, Cmd.none )
+            ( keyDown keyCode model
+            , Cmd.none
+            )
 
         MousePosition mousePosition ->
             ( { model | spiderCenter = mousePosition }
@@ -153,40 +169,14 @@ update msg model =
             )
 
 
-scalePoint : Dimension -> Point -> Point
-scalePoint dimension point =
-    let
-        x =
-            point.x * dimension.width
-
-        y =
-            point.y * dimension.height
-    in
-        Point x y
-
-
-randomPoints : List Point
-randomPoints =
-    let
-        ( points, _ ) =
-            step (list pointCount randomPoint) (initialSeed seed)
-    in
-        points
-
-
-randomPoint : Generator Point
-randomPoint =
-    Random.map (\( x, y ) -> Point x y) (pair (float 0 1) (float 0 1))
-
-
 keyDown : KeyCode -> Model -> Model
 keyDown keyCode model =
     let
         w =
-            model.dimension.width
+            model.screen.width
 
         h =
-            model.dimension.height
+            model.screen.height
 
         x =
             model.spiderCenter.x
@@ -229,10 +219,13 @@ view : Model -> Html Msg
 view model =
     let
         w =
-            model.dimension.width
+            model.screen.width
 
         h =
-            model.dimension.height
+            model.screen.height
+
+        points =
+            List.map (scaleToScreen model.screen) model.points
     in
         svg
             [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
@@ -241,10 +234,15 @@ view model =
               -- prevent scrollbar
             , style "display: block"
             ]
-            [ viewPoints model.points
+            [ viewPoints points
             , viewSpiderCenter model.spiderCenter
-            , viewSpiderLegs model.spiderCenter model.legLength model.points
+            , viewSpiderLegs model.spiderCenter model.legLength points
             ]
+
+
+scaleToScreen : Dimension -> Point -> Point
+scaleToScreen screen point =
+    Point (point.x * screen.width) (point.y * screen.height)
 
 
 viewSpiderCenter : Point -> Svg msg
