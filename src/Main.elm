@@ -14,6 +14,7 @@ import Mouse exposing (..)
 import Svg exposing (line, g, circle, Svg, svg)
 import Svg.Attributes exposing (..)
 import String exposing (concat)
+import Time exposing (..)
 
 
 -- CONFIG
@@ -22,11 +23,6 @@ import String exposing (concat)
 elmOrange : String
 elmOrange =
     "#F0AD00"
-
-
-seed : Int
-seed =
-    42
 
 
 pointCount : Int
@@ -62,6 +58,8 @@ type Msg
     = Resize Size
     | KeyDown KeyCode
     | MousePosition Point
+    | InitSeed Time
+    | InitPoints
 
 
 
@@ -69,7 +67,8 @@ type Msg
 
 
 type alias Model =
-    { screen : Dimension
+    { seed : Int
+    , screen : Dimension
     , spiderCenter : Point
     , legLength : Float
     , points : List Point
@@ -96,17 +95,21 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { screen = Dimension 0 0
+    ( { seed = 0
+      , screen = Dimension 0 0
       , spiderCenter = Point 0 0
       , legLength = defaultLegLength
-      , points = randomPoints
+      , points = []
       }
-    , Task.perform Resize Resize Window.size
+    , Cmd.batch
+        [ Task.perform Resize Resize Window.size
+        , Task.perform InitSeed InitSeed Time.now
+        ]
     )
 
 
-randomPoints : List Point
-randomPoints =
+randomPoints : Int -> List Point
+randomPoints seed =
     let
         ( points, _ ) =
             step (list pointCount randomPoint) (initialSeed seed)
@@ -140,6 +143,18 @@ subscriptions =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        InitSeed seed ->
+            let
+                model' =
+                    { model | seed = round seed }
+            in
+                update InitPoints model'
+
+        InitPoints ->
+            ( { model | points = randomPoints model.seed }
+            , Cmd.none
+            )
+
         Resize s ->
             let
                 w =
