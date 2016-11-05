@@ -11,7 +11,7 @@ import Keyboard exposing (..)
 import Debug exposing (..)
 import Random exposing (..)
 import Mouse exposing (..)
-import Svg exposing (line, g, circle, Svg, svg)
+import Svg exposing (line, g, circle, Svg, svg, rect)
 import Svg.Attributes exposing (..)
 import String exposing (concat)
 import Time exposing (..)
@@ -34,6 +34,21 @@ main =
 -- CONFIG
 
 
+hexBlack : String
+hexBlack =
+    "#000000"
+
+
+hexWhite : String
+hexWhite =
+    "#FFFFFF"
+
+
+hexGrey : String
+hexGrey =
+    "#999999"
+
+
 hexOrange : String
 hexOrange =
     "#F0AD00"
@@ -51,7 +66,7 @@ pointCount =
 
 pointRadius : Float
 pointRadius =
-    10
+    2.5
 
 
 pixelsPerArrowPress : Int
@@ -84,6 +99,16 @@ foodPointRadius =
     15
 
 
+poisonPointCount : Int
+poisonPointCount =
+    10
+
+
+poisonPointRadius : Float
+poisonPointRadius =
+    15
+
+
 
 -- MSG
 
@@ -94,6 +119,7 @@ type Msg
     | MousePosition Point
     | RandomPoints (List Point)
     | RandomFoodPoints (List Point)
+    | RandomPoisonPoints (List Point)
     | DetectCollisions
 
 
@@ -107,6 +133,7 @@ type alias Model =
     , legLength : Float
     , points : List Point
     , foodPoints : List Point
+    , poisonPoints : List Point
     }
 
 
@@ -125,11 +152,13 @@ init =
       , legLength = initialLegLength
       , points = []
       , foodPoints = []
+      , poisonPoints = []
       }
     , Cmd.batch
         [ Task.perform Resize Resize Window.size
         , Random.generate RandomPoints (list pointCount randomPoint)
         , Random.generate RandomFoodPoints (list foodPointCount randomPoint)
+        , Random.generate RandomPoisonPoints (list poisonPointCount randomPoint)
         ]
     )
 
@@ -170,6 +199,11 @@ update msg model =
             , detectCollisions
             )
 
+        RandomPoisonPoints poisonPoints ->
+            ( { model | poisonPoints = poisonPoints }
+            , detectCollisions
+            )
+
         Resize s ->
             let
                 w =
@@ -200,24 +234,33 @@ update msg model =
 
         DetectCollisions ->
             let
-                notEaten =
+                colliding =
+                    (\p -> collidingWithSpider model.spiderCenter p model.screen)
+
+                notColliding =
                     (\p -> not (collidingWithSpider model.spiderCenter p model.screen))
 
+                poisoned =
+                    List.any colliding model.poisonPoints
+
                 remainingFoodPoints =
-                    List.filter notEaten model.foodPoints
+                    List.filter notColliding model.foodPoints
 
                 eatenPointCount =
                     (List.length model.foodPoints) - (List.length remainingFoodPoints)
 
-                grownLegLength =
+                newLegLength =
                     (legGrowthFactor ^ (toFloat eatenPointCount)) * model.legLength
             in
-                ( { model
-                    | foodPoints = remainingFoodPoints
-                    , legLength = grownLegLength
-                  }
-                , Cmd.none
-                )
+                if poisoned then
+                    ( { model | legLength = initialLegLength }, Cmd.none )
+                else
+                    ( { model
+                        | foodPoints = remainingFoodPoints
+                        , legLength = newLegLength
+                      }
+                    , Cmd.none
+                    )
 
 
 detectCollisions : Cmd Msg
@@ -309,6 +352,9 @@ view model =
 
         foodPoints =
             List.map (scaleToScreen model.screen) model.foodPoints
+
+        poisonPoints =
+            List.map (scaleToScreen model.screen) model.poisonPoints
     in
         svg
             [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
@@ -317,10 +363,12 @@ view model =
               -- prevent scrollbar
             , style "display: block"
             ]
-            [ viewPoints points
+            [ viewBackground
+            , viewPoints points
             , viewFoodPoints foodPoints
-            , viewSpiderCenter model.spiderCenter
+            , viewPoisonPoints poisonPoints
             , viewSpiderLegs model.spiderCenter model.legLength points
+            , viewSpiderCenter model.spiderCenter
             ]
 
 
@@ -329,19 +377,29 @@ scaleToScreen screen point =
     Point (point.x * screen.width) (point.y * screen.height)
 
 
+viewBackground : Svg msg
+viewBackground =
+    rect [ width "100%", height "100%", fill hexBlack ] []
+
+
 viewSpiderCenter : Point -> Svg msg
 viewSpiderCenter spiderCenter =
-    viewPoint spiderCenter hexOrange pointRadius
+    viewPoint spiderCenter hexWhite pointRadius
 
 
 viewPoints : List Point -> Svg msg
 viewPoints points =
-    g [] (List.map (\p -> viewPoint p "black" pointRadius) points)
+    g [] (List.map (\p -> viewPoint p hexGrey pointRadius) points)
 
 
 viewFoodPoints : List Point -> Svg msg
 viewFoodPoints points =
     g [] (List.map (\p -> viewPoint p hexBlue foodPointRadius) points)
+
+
+viewPoisonPoints : List Point -> Svg msg
+viewPoisonPoints points =
+    g [] (List.map (\p -> viewPoint p hexOrange poisonPointRadius) points)
 
 
 viewPoint : Point -> String -> Float -> Svg msg
@@ -383,7 +441,7 @@ viewSpiderLeg spiderCenter legEnd =
         , y1 (toString spiderCenter.y)
         , x2 (toString legEnd.x)
         , y2 (toString legEnd.y)
-        , stroke hexOrange
+        , stroke hexWhite
         , strokeWidth (toString legWidth)
         , strokeLinecap "round"
         ]
