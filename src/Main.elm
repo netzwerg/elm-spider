@@ -11,7 +11,7 @@ import Keyboard exposing (..)
 import Debug exposing (..)
 import Random exposing (..)
 import Mouse exposing (..)
-import Svg exposing (line, g, circle, Svg, svg, rect)
+import Svg exposing (line, g, circle, Svg, svg, rect, text, text')
 import Svg.Attributes exposing (..)
 import String exposing (concat)
 import Time exposing (..)
@@ -69,8 +69,8 @@ pointCount =
     300
 
 
-pointRadius : Float
-pointRadius =
+smallPointRadius : Float
+smallPointRadius =
     2.5
 
 
@@ -96,11 +96,11 @@ legGrowthFactor =
 
 foodPointCount : Int
 foodPointCount =
-    10
+    5
 
 
-foodPointRadius : Float
-foodPointRadius =
+bigPointRadius : Float
+bigPointRadius =
     15
 
 
@@ -109,15 +109,9 @@ poisonPointCount =
     10
 
 
-poisonPointRadius : Float
-poisonPointRadius =
-    15
-
-
-resetPointRadius : Float
-resetPointRadius =
-    20
-
+padding : Float
+padding =
+    100
 
 
 -- MSG
@@ -134,6 +128,10 @@ type Msg
     | Reset
     | DetectPoisonCollision
     | DetectFoodCollision
+    | Tick Time
+    | UpdateTimer
+    | StartTimer
+    | StopTimer Stop
 
 
 
@@ -148,6 +146,8 @@ type alias Model =
     , foodPoints : List Point
     , poisonPoints : List Point
     , resetPoint : Point
+    , time : Time
+    , timer : Timer
     }
 
 
@@ -159,6 +159,16 @@ type alias Dimension =
     { width : Float, height : Float }
 
 
+type Timer
+    = Idle
+    | Started Time
+    | Stopped Stop
+
+type Stop
+    = Success Time
+    | Failure
+
+
 init : ( Model, Cmd Msg )
 init =
     ( { screen = Dimension 0 0
@@ -168,6 +178,8 @@ init =
       , foodPoints = []
       , poisonPoints = []
       , resetPoint = Point 0 0
+      , time = 0
+      , timer = Idle
       }
     , Cmd.batch
         [ Task.perform Resize Resize Window.size
@@ -199,6 +211,7 @@ subscriptions =
         [ Window.resizes Resize
         , Keyboard.downs KeyDown
         , Mouse.moves (\{ x, y } -> MousePosition (Point (toFloat x) (toFloat y)))
+        , Time.every millisecond Tick
         ]
 
 
@@ -209,6 +222,9 @@ subscriptions =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Tick time ->
+            ( { model | time = time }, Cmd.none )
+
         RandomPoints points ->
             ( { model | points = points }
             , Cmd.none
@@ -238,7 +254,7 @@ update msg model =
                 ( { model
                     | screen = screen
                     , spiderCenter = Point (w / 2) (h / 2)
-                    , resetPoint = Point 0.95 (w * 0.05 / h)
+                    , resetPoint = Point (w - padding) padding
                   }
                 , detectCollisionsCmd
                 )
@@ -254,7 +270,7 @@ update msg model =
         DetectResetCollision ->
             let
                 reset =
-                    collidingWithSpider model.spiderCenter model.resetPoint model.screen
+                    collidingWithSpider model.spiderCenter model.resetPoint (Dimension 1 1)
             in
                 if reset then
                     ( model, cmdFromMsg Reset )
@@ -262,7 +278,37 @@ update msg model =
                     ( model, Cmd.none )
 
         Reset ->
-            ( { model | legLength = initialLegLength }, randomFoodPointsCmd )
+            ( { model
+                | legLength = initialLegLength
+                , timer = Idle
+              }
+            , randomFoodPointsCmd
+            )
+
+        UpdateTimer ->
+            let
+                cmd =
+                    case model.timer of
+                        Idle ->
+                            if ((List.length model.foodPoints) == (foodPointCount - 1)) then
+                                cmdFromMsg StartTimer
+                            else
+                                Cmd.none
+                        Started startTime ->
+                            if (List.isEmpty model.foodPoints) then
+                                cmdFromMsg (StopTimer (Success (model.time - startTime)))
+                            else
+                                Cmd.none
+                        _ ->
+                            Cmd.none
+            in
+                ( model, cmd )
+
+        StartTimer ->
+            ( { model | timer = Started model.time }, Cmd.none )
+
+        StopTimer stop ->
+            ( { model | timer = Stopped stop }, Cmd.none )
 
         DetectPoisonCollision ->
             let
@@ -273,7 +319,11 @@ update msg model =
                     List.any colliding model.poisonPoints
             in
                 if poisoned then
-                    ( { model | legLength = initialLegLength }, Cmd.none )
+                    case model.timer of
+                        Started _ ->
+                            ( { model | legLength = initialLegLength }, cmdFromMsg (StopTimer Failure))
+                        _ ->
+                            ( { model | legLength = initialLegLength }, Cmd.none )
                 else
                     ( model, Cmd.none )
 
@@ -295,7 +345,7 @@ update msg model =
                     | foodPoints = remainingFoodPoints
                     , legLength = grownLegLength
                   }
-                , Cmd.none
+                , cmdFromMsg UpdateTimer
                 )
 
 
@@ -314,13 +364,13 @@ cmdFromMsg msg =
 
 
 collidingWithSpider : Point -> Point -> Dimension -> Bool
-collidingWithSpider spiderCenter point screen =
+collidingWithSpider spiderCenter point scale =
     let
         ( x1, y1 ) =
             ( spiderCenter.x, spiderCenter.y )
 
         scaledPoint =
-            scaleToScreen screen point
+            scaleToScreen scale point
 
         ( x2, y2 ) =
             ( scaledPoint.x, scaledPoint.y )
@@ -332,7 +382,7 @@ collidingWithSpider spiderCenter point screen =
             (y1 - y2)
 
         c =
-            pointRadius + foodPointRadius
+            smallPointRadius + bigPointRadius
     in
         a * a + b * b < c * c
 
@@ -410,8 +460,6 @@ view model =
         poisonPoints =
             List.map (scaleToScreen model.screen) model.poisonPoints
 
-        scaledResetPoint =
-            scaleToScreen model.screen model.resetPoint
     in
         svg
             [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
@@ -424,9 +472,10 @@ view model =
             , viewPoints points
             , viewFoodPoints foodPoints
             , viewPoisonPoints poisonPoints
-            , viewResetPoint scaledResetPoint
+            , viewResetPoint model.resetPoint
             , viewSpiderLegs model.spiderCenter model.legLength points
             , viewSpiderCenter model.spiderCenter
+            , viewTimer model
             ]
 
 
@@ -442,27 +491,27 @@ viewBackground =
 
 viewSpiderCenter : Point -> Svg msg
 viewSpiderCenter spiderCenter =
-    viewPoint spiderCenter hexWhite pointRadius
+    viewPoint spiderCenter hexWhite smallPointRadius
 
 
 viewPoints : List Point -> Svg msg
 viewPoints points =
-    g [] (List.map (\p -> viewPoint p hexGrey pointRadius) points)
+    g [] (List.map (\p -> viewPoint p hexGrey smallPointRadius) points)
 
 
 viewFoodPoints : List Point -> Svg msg
 viewFoodPoints points =
-    g [] (List.map (\p -> viewPoint p hexBlue foodPointRadius) points)
+    g [] (List.map (\p -> viewPoint p hexBlue bigPointRadius) points)
 
 
 viewPoisonPoints : List Point -> Svg msg
 viewPoisonPoints points =
-    g [] (List.map (\p -> viewPoint p hexOrange poisonPointRadius) points)
+    g [] (List.map (\p -> viewPoint p hexOrange bigPointRadius) points)
 
 
 viewResetPoint : Point -> Svg msg
 viewResetPoint point =
-    viewPoint point hexGreen resetPointRadius
+    viewPoint point hexGreen bigPointRadius
 
 
 viewPoint : Point -> String -> Float -> Svg msg
@@ -509,3 +558,39 @@ viewSpiderLeg spiderCenter legEnd =
         , strokeLinecap "round"
         ]
         []
+
+
+viewTimer : Model -> Svg msg
+viewTimer model =
+    let
+        timeToString : Time -> String
+        timeToString time =
+            (toString (round (Time.inMilliseconds time))) ++ " ms"
+
+        (timerText, color) =
+            case model.timer of
+                Idle ->
+                    ("Ready", hexWhite)
+
+                Started startTime ->
+                    (timeToString (model.time - startTime), hexWhite)
+
+                Stopped stop ->
+                    case stop of
+                        Success elapsedTime ->
+                            ((timeToString elapsedTime), hexGreen)
+                        _ ->
+                            ("Game Over", hexOrange)
+
+    in
+        text'
+            [ x (toString (model.screen.width / 2))
+            , y (toString padding)
+            , fontFamily "Helvetica"
+            , fontSize "40px"
+            , textAnchor "middle"
+            , alignmentBaseline "middle"
+            , fill color
+            ]
+            [ text timerText
+            ]
