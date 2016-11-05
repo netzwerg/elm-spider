@@ -9408,12 +9408,8 @@ var _netzwerg$elm_spider$Main$withinLegRange = F3(
 		var dx = spiderCenter.x - point.x;
 		return _elm_lang$core$Native_Utils.cmp((dx * dx) + (dy * dy), legLength * legLength) < 0;
 	});
-var _netzwerg$elm_spider$Main$legWidth = 5;
-var _netzwerg$elm_spider$Main$defaultLegLength = 100;
-var _netzwerg$elm_spider$Main$pixelsPerArrowPress = 10;
-var _netzwerg$elm_spider$Main$pointRadius = 10;
-var _netzwerg$elm_spider$Main$viewPoint = F2(
-	function (point, color) {
+var _netzwerg$elm_spider$Main$viewPoint = F3(
+	function (point, color, radius) {
 		return A2(
 			_elm_lang$svg$Svg$circle,
 			_elm_lang$core$Native_List.fromArray(
@@ -9423,12 +9419,61 @@ var _netzwerg$elm_spider$Main$viewPoint = F2(
 					_elm_lang$svg$Svg_Attributes$cy(
 					_elm_lang$core$Basics$toString(point.y)),
 					_elm_lang$svg$Svg_Attributes$r(
-					_elm_lang$core$Basics$toString(_netzwerg$elm_spider$Main$pointRadius)),
+					_elm_lang$core$Basics$toString(radius)),
 					_elm_lang$svg$Svg_Attributes$fill(color)
 				]),
 			_elm_lang$core$Native_List.fromArray(
 				[]));
 	});
+var _netzwerg$elm_spider$Main$cmdFromMsg = function (msg) {
+	return A3(
+		_elm_lang$core$Task$perform,
+		_elm_lang$core$Basics$identity,
+		_elm_lang$core$Basics$identity,
+		_elm_lang$core$Task$succeed(msg));
+};
+var _netzwerg$elm_spider$Main$resetPointRadius = 20;
+var _netzwerg$elm_spider$Main$poisonPointRadius = 15;
+var _netzwerg$elm_spider$Main$poisonPointCount = 10;
+var _netzwerg$elm_spider$Main$foodPointRadius = 15;
+var _netzwerg$elm_spider$Main$foodPointCount = 10;
+var _netzwerg$elm_spider$Main$legGrowthFactor = 1.2;
+var _netzwerg$elm_spider$Main$legWidth = 5;
+var _netzwerg$elm_spider$Main$initialLegLength = 100;
+var _netzwerg$elm_spider$Main$pixelsPerArrowPress = 10;
+var _netzwerg$elm_spider$Main$pointRadius = 2.5;
+var _netzwerg$elm_spider$Main$pointCount = 300;
+var _netzwerg$elm_spider$Main$hexBlue = '#60B5CC';
+var _netzwerg$elm_spider$Main$viewFoodPoints = function (points) {
+	return A2(
+		_elm_lang$svg$Svg$g,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		A2(
+			_elm_lang$core$List$map,
+			function (p) {
+				return A3(_netzwerg$elm_spider$Main$viewPoint, p, _netzwerg$elm_spider$Main$hexBlue, _netzwerg$elm_spider$Main$foodPointRadius);
+			},
+			points));
+};
+var _netzwerg$elm_spider$Main$hexGreen = '#8AE234';
+var _netzwerg$elm_spider$Main$viewResetPoint = function (point) {
+	return A3(_netzwerg$elm_spider$Main$viewPoint, point, _netzwerg$elm_spider$Main$hexGreen, _netzwerg$elm_spider$Main$resetPointRadius);
+};
+var _netzwerg$elm_spider$Main$hexOrange = '#F0AD00';
+var _netzwerg$elm_spider$Main$viewPoisonPoints = function (points) {
+	return A2(
+		_elm_lang$svg$Svg$g,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		A2(
+			_elm_lang$core$List$map,
+			function (p) {
+				return A3(_netzwerg$elm_spider$Main$viewPoint, p, _netzwerg$elm_spider$Main$hexOrange, _netzwerg$elm_spider$Main$poisonPointRadius);
+			},
+			points));
+};
+var _netzwerg$elm_spider$Main$hexGrey = '#999999';
 var _netzwerg$elm_spider$Main$viewPoints = function (points) {
 	return A2(
 		_elm_lang$svg$Svg$g,
@@ -9436,13 +9481,14 @@ var _netzwerg$elm_spider$Main$viewPoints = function (points) {
 			[]),
 		A2(
 			_elm_lang$core$List$map,
-			A2(_elm_lang$core$Basics$flip, _netzwerg$elm_spider$Main$viewPoint, 'black'),
+			function (p) {
+				return A3(_netzwerg$elm_spider$Main$viewPoint, p, _netzwerg$elm_spider$Main$hexGrey, _netzwerg$elm_spider$Main$pointRadius);
+			},
 			points));
 };
-var _netzwerg$elm_spider$Main$pointCount = 300;
-var _netzwerg$elm_spider$Main$elmOrange = '#F0AD00';
+var _netzwerg$elm_spider$Main$hexWhite = '#FFFFFF';
 var _netzwerg$elm_spider$Main$viewSpiderCenter = function (spiderCenter) {
-	return A2(_netzwerg$elm_spider$Main$viewPoint, spiderCenter, _netzwerg$elm_spider$Main$elmOrange);
+	return A3(_netzwerg$elm_spider$Main$viewPoint, spiderCenter, _netzwerg$elm_spider$Main$hexWhite, _netzwerg$elm_spider$Main$pointRadius);
 };
 var _netzwerg$elm_spider$Main$viewSpiderLeg = F2(
 	function (spiderCenter, legEnd) {
@@ -9458,7 +9504,7 @@ var _netzwerg$elm_spider$Main$viewSpiderLeg = F2(
 					_elm_lang$core$Basics$toString(legEnd.x)),
 					_elm_lang$svg$Svg_Attributes$y2(
 					_elm_lang$core$Basics$toString(legEnd.y)),
-					_elm_lang$svg$Svg_Attributes$stroke(_netzwerg$elm_spider$Main$elmOrange),
+					_elm_lang$svg$Svg_Attributes$stroke(_netzwerg$elm_spider$Main$hexWhite),
 					_elm_lang$svg$Svg_Attributes$strokeWidth(
 					_elm_lang$core$Basics$toString(_netzwerg$elm_spider$Main$legWidth)),
 					_elm_lang$svg$Svg_Attributes$strokeLinecap('round')
@@ -9481,9 +9527,20 @@ var _netzwerg$elm_spider$Main$viewSpiderLegs = F3(
 				_netzwerg$elm_spider$Main$viewSpiderLeg(spiderCenter),
 				legPoints));
 	});
-var _netzwerg$elm_spider$Main$Model = F5(
-	function (a, b, c, d, e) {
-		return {seed: a, screen: b, spiderCenter: c, legLength: d, points: e};
+var _netzwerg$elm_spider$Main$hexBlack = '#000000';
+var _netzwerg$elm_spider$Main$viewBackground = A2(
+	_elm_lang$svg$Svg$rect,
+	_elm_lang$core$Native_List.fromArray(
+		[
+			_elm_lang$svg$Svg_Attributes$width('100%'),
+			_elm_lang$svg$Svg_Attributes$height('100%'),
+			_elm_lang$svg$Svg_Attributes$fill(_netzwerg$elm_spider$Main$hexBlack)
+		]),
+	_elm_lang$core$Native_List.fromArray(
+		[]));
+var _netzwerg$elm_spider$Main$Model = F7(
+	function (a, b, c, d, e, f, g) {
+		return {screen: a, spiderCenter: b, legLength: c, points: d, foodPoints: e, poisonPoints: f, resetPoint: g};
 	});
 var _netzwerg$elm_spider$Main$Point = F2(
 	function (a, b) {
@@ -9499,57 +9556,34 @@ var _netzwerg$elm_spider$Main$randomPoint = A2(
 		_elm_lang$core$Random$pair,
 		A2(_elm_lang$core$Random$float, 0, 1),
 		A2(_elm_lang$core$Random$float, 0, 1)));
-var _netzwerg$elm_spider$Main$randomPoints = function (seed) {
-	var _p2 = A2(
-		_elm_lang$core$Random$step,
-		A2(_elm_lang$core$Random$list, _netzwerg$elm_spider$Main$pointCount, _netzwerg$elm_spider$Main$randomPoint),
-		_elm_lang$core$Random$initialSeed(seed));
-	var points = _p2._0;
-	return points;
-};
-var _netzwerg$elm_spider$Main$keyDown = F2(
-	function (keyCode, model) {
-		var delta = _elm_lang$core$Basics$toFloat(_netzwerg$elm_spider$Main$pixelsPerArrowPress);
-		var y = model.spiderCenter.y;
-		var x = model.spiderCenter.x;
-		var h = model.screen.height;
-		var w = model.screen.width;
-		var spiderCenter = function () {
-			var _p3 = keyCode;
-			switch (_p3) {
-				case 37:
-					return A2(
-						_netzwerg$elm_spider$Main$Point,
-						A2(_elm_lang$core$Basics$max, x - delta, 0),
-						y);
-				case 38:
-					return A2(
-						_netzwerg$elm_spider$Main$Point,
-						x,
-						A2(_elm_lang$core$Basics$max, y - delta, 0));
-				case 39:
-					return A2(
-						_netzwerg$elm_spider$Main$Point,
-						A2(_elm_lang$core$Basics$min, x + delta, w),
-						y);
-				case 40:
-					return A2(
-						_netzwerg$elm_spider$Main$Point,
-						x,
-						A2(_elm_lang$core$Basics$min, y + delta, h));
-				default:
-					return A2(_netzwerg$elm_spider$Main$Point, x, y);
-			}
-		}();
-		return _elm_lang$core$Native_Utils.update(
-			model,
-			{spiderCenter: spiderCenter});
-	});
 var _netzwerg$elm_spider$Main$scaleToScreen = F2(
 	function (screen, point) {
 		return A2(_netzwerg$elm_spider$Main$Point, point.x * screen.width, point.y * screen.height);
 	});
+var _netzwerg$elm_spider$Main$collidingWithSpider = F3(
+	function (spiderCenter, point, screen) {
+		var c = _netzwerg$elm_spider$Main$pointRadius + _netzwerg$elm_spider$Main$foodPointRadius;
+		var scaledPoint = A2(_netzwerg$elm_spider$Main$scaleToScreen, screen, point);
+		var _p2 = {ctor: '_Tuple2', _0: scaledPoint.x, _1: scaledPoint.y};
+		var x2 = _p2._0;
+		var y2 = _p2._1;
+		var _p3 = {ctor: '_Tuple2', _0: spiderCenter.x, _1: spiderCenter.y};
+		var x1 = _p3._0;
+		var y1 = _p3._1;
+		var a = x1 - x2;
+		var b = y1 - y2;
+		return _elm_lang$core$Native_Utils.cmp((a * a) + (b * b), c * c) < 0;
+	});
 var _netzwerg$elm_spider$Main$view = function (model) {
+	var scaledResetPoint = A2(_netzwerg$elm_spider$Main$scaleToScreen, model.screen, model.resetPoint);
+	var poisonPoints = A2(
+		_elm_lang$core$List$map,
+		_netzwerg$elm_spider$Main$scaleToScreen(model.screen),
+		model.poisonPoints);
+	var foodPoints = A2(
+		_elm_lang$core$List$map,
+		_netzwerg$elm_spider$Main$scaleToScreen(model.screen),
+		model.foodPoints);
 	var points = A2(
 		_elm_lang$core$List$map,
 		_netzwerg$elm_spider$Main$scaleToScreen(model.screen),
@@ -9575,77 +9609,194 @@ var _netzwerg$elm_spider$Main$view = function (model) {
 			]),
 		_elm_lang$core$Native_List.fromArray(
 			[
+				_netzwerg$elm_spider$Main$viewBackground,
 				_netzwerg$elm_spider$Main$viewPoints(points),
-				_netzwerg$elm_spider$Main$viewSpiderCenter(model.spiderCenter),
-				A3(_netzwerg$elm_spider$Main$viewSpiderLegs, model.spiderCenter, model.legLength, points)
+				_netzwerg$elm_spider$Main$viewFoodPoints(foodPoints),
+				_netzwerg$elm_spider$Main$viewPoisonPoints(poisonPoints),
+				_netzwerg$elm_spider$Main$viewResetPoint(scaledResetPoint),
+				A3(_netzwerg$elm_spider$Main$viewSpiderLegs, model.spiderCenter, model.legLength, points),
+				_netzwerg$elm_spider$Main$viewSpiderCenter(model.spiderCenter)
 			]));
 };
 var _netzwerg$elm_spider$Main$Dimension = F2(
 	function (a, b) {
 		return {width: a, height: b};
 	});
-var _netzwerg$elm_spider$Main$InitPoints = {ctor: 'InitPoints'};
+var _netzwerg$elm_spider$Main$DetectFoodCollision = {ctor: 'DetectFoodCollision'};
+var _netzwerg$elm_spider$Main$DetectPoisonCollision = {ctor: 'DetectPoisonCollision'};
+var _netzwerg$elm_spider$Main$Reset = {ctor: 'Reset'};
+var _netzwerg$elm_spider$Main$DetectResetCollision = {ctor: 'DetectResetCollision'};
+var _netzwerg$elm_spider$Main$detectCollisionsCmd = _elm_lang$core$Platform_Cmd$batch(
+	_elm_lang$core$Native_List.fromArray(
+		[
+			_netzwerg$elm_spider$Main$cmdFromMsg(_netzwerg$elm_spider$Main$DetectResetCollision),
+			_netzwerg$elm_spider$Main$cmdFromMsg(_netzwerg$elm_spider$Main$DetectPoisonCollision),
+			_netzwerg$elm_spider$Main$cmdFromMsg(_netzwerg$elm_spider$Main$DetectFoodCollision)
+		]));
+var _netzwerg$elm_spider$Main$keyDown = F2(
+	function (keyCode, model) {
+		var cmd = function () {
+			var _p4 = keyCode;
+			if (_p4 === 32) {
+				return _netzwerg$elm_spider$Main$cmdFromMsg(_netzwerg$elm_spider$Main$Reset);
+			} else {
+				return _elm_lang$core$Platform_Cmd$none;
+			}
+		}();
+		var delta = _elm_lang$core$Basics$toFloat(_netzwerg$elm_spider$Main$pixelsPerArrowPress);
+		var y = model.spiderCenter.y;
+		var x = model.spiderCenter.x;
+		var h = model.screen.height;
+		var w = model.screen.width;
+		var spiderCenter = function () {
+			var _p5 = keyCode;
+			switch (_p5) {
+				case 37:
+					return A2(
+						_netzwerg$elm_spider$Main$Point,
+						A2(_elm_lang$core$Basics$max, x - delta, 0),
+						y);
+				case 38:
+					return A2(
+						_netzwerg$elm_spider$Main$Point,
+						x,
+						A2(_elm_lang$core$Basics$max, y - delta, 0));
+				case 39:
+					return A2(
+						_netzwerg$elm_spider$Main$Point,
+						A2(_elm_lang$core$Basics$min, x + delta, w),
+						y);
+				case 40:
+					return A2(
+						_netzwerg$elm_spider$Main$Point,
+						x,
+						A2(_elm_lang$core$Basics$min, y + delta, h));
+				default:
+					return A2(_netzwerg$elm_spider$Main$Point, x, y);
+			}
+		}();
+		return {
+			ctor: '_Tuple2',
+			_0: _elm_lang$core$Native_Utils.update(
+				model,
+				{spiderCenter: spiderCenter}),
+			_1: _elm_lang$core$Platform_Cmd$batch(
+				_elm_lang$core$Native_List.fromArray(
+					[cmd, _netzwerg$elm_spider$Main$detectCollisionsCmd]))
+		};
+	});
+var _netzwerg$elm_spider$Main$RandomPoisonPoints = function (a) {
+	return {ctor: 'RandomPoisonPoints', _0: a};
+};
+var _netzwerg$elm_spider$Main$RandomFoodPoints = function (a) {
+	return {ctor: 'RandomFoodPoints', _0: a};
+};
+var _netzwerg$elm_spider$Main$randomFoodPointsCmd = A2(
+	_elm_lang$core$Random$generate,
+	_netzwerg$elm_spider$Main$RandomFoodPoints,
+	A2(_elm_lang$core$Random$list, _netzwerg$elm_spider$Main$foodPointCount, _netzwerg$elm_spider$Main$randomPoint));
 var _netzwerg$elm_spider$Main$update = F2(
 	function (msg, model) {
-		update:
-		while (true) {
-			var _p4 = msg;
-			switch (_p4.ctor) {
-				case 'InitSeed':
-					var model$ = _elm_lang$core$Native_Utils.update(
+		var _p6 = msg;
+		switch (_p6.ctor) {
+			case 'RandomPoints':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{points: _p6._0}),
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
+			case 'RandomFoodPoints':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{foodPoints: _p6._0}),
+					_1: _netzwerg$elm_spider$Main$detectCollisionsCmd
+				};
+			case 'RandomPoisonPoints':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{poisonPoints: _p6._0}),
+					_1: _netzwerg$elm_spider$Main$detectCollisionsCmd
+				};
+			case 'Resize':
+				var _p7 = _p6._0;
+				var h = _elm_lang$core$Basics$toFloat(_p7.height);
+				var w = _elm_lang$core$Basics$toFloat(_p7.width);
+				var screen = A2(_netzwerg$elm_spider$Main$Dimension, w, h);
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
 						model,
 						{
-							seed: _elm_lang$core$Basics$round(_p4._0)
-						});
-					var _v3 = _netzwerg$elm_spider$Main$InitPoints,
-						_v4 = model$;
-					msg = _v3;
-					model = _v4;
-					continue update;
-				case 'InitPoints':
-					return {
-						ctor: '_Tuple2',
-						_0: _elm_lang$core$Native_Utils.update(
-							model,
-							{
-								points: _netzwerg$elm_spider$Main$randomPoints(model.seed)
-							}),
-						_1: _elm_lang$core$Platform_Cmd$none
-					};
-				case 'Resize':
-					var _p5 = _p4._0;
-					var h = _elm_lang$core$Basics$toFloat(_p5.height);
-					var w = _elm_lang$core$Basics$toFloat(_p5.width);
-					var screen = A2(_netzwerg$elm_spider$Main$Dimension, w, h);
-					return {
-						ctor: '_Tuple2',
-						_0: _elm_lang$core$Native_Utils.update(
-							model,
-							{
-								screen: screen,
-								spiderCenter: A2(_netzwerg$elm_spider$Main$Point, w / 2, h / 2)
-							}),
-						_1: _elm_lang$core$Platform_Cmd$none
-					};
-				case 'KeyDown':
-					return {
-						ctor: '_Tuple2',
-						_0: A2(_netzwerg$elm_spider$Main$keyDown, _p4._0, model),
-						_1: _elm_lang$core$Platform_Cmd$none
-					};
-				default:
-					return {
-						ctor: '_Tuple2',
-						_0: _elm_lang$core$Native_Utils.update(
-							model,
-							{spiderCenter: _p4._0}),
-						_1: _elm_lang$core$Platform_Cmd$none
-					};
-			}
+							screen: screen,
+							spiderCenter: A2(_netzwerg$elm_spider$Main$Point, w / 2, h / 2),
+							resetPoint: A2(_netzwerg$elm_spider$Main$Point, 0.95, (w * 5.0e-2) / h)
+						}),
+					_1: _netzwerg$elm_spider$Main$detectCollisionsCmd
+				};
+			case 'KeyDown':
+				return A2(_netzwerg$elm_spider$Main$keyDown, _p6._0, model);
+			case 'MousePosition':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{spiderCenter: _p6._0}),
+					_1: _netzwerg$elm_spider$Main$detectCollisionsCmd
+				};
+			case 'DetectResetCollision':
+				var reset = A3(_netzwerg$elm_spider$Main$collidingWithSpider, model.spiderCenter, model.resetPoint, model.screen);
+				return reset ? {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: _netzwerg$elm_spider$Main$cmdFromMsg(_netzwerg$elm_spider$Main$Reset)
+				} : {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+			case 'Reset':
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{legLength: _netzwerg$elm_spider$Main$initialLegLength}),
+					_1: _netzwerg$elm_spider$Main$randomFoodPointsCmd
+				};
+			case 'DetectPoisonCollision':
+				var colliding = function (p) {
+					return A3(_netzwerg$elm_spider$Main$collidingWithSpider, model.spiderCenter, p, model.screen);
+				};
+				var poisoned = A2(_elm_lang$core$List$any, colliding, model.poisonPoints);
+				return poisoned ? {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{legLength: _netzwerg$elm_spider$Main$initialLegLength}),
+					_1: _elm_lang$core$Platform_Cmd$none
+				} : {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+			default:
+				var notColliding = function (p) {
+					return _elm_lang$core$Basics$not(
+						A3(_netzwerg$elm_spider$Main$collidingWithSpider, model.spiderCenter, p, model.screen));
+				};
+				var remainingFoodPoints = A2(_elm_lang$core$List$filter, notColliding, model.foodPoints);
+				var eatenPointCount = _elm_lang$core$List$length(model.foodPoints) - _elm_lang$core$List$length(remainingFoodPoints);
+				var grownLegLength = Math.pow(
+					_netzwerg$elm_spider$Main$legGrowthFactor,
+					_elm_lang$core$Basics$toFloat(eatenPointCount)) * model.legLength;
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						model,
+						{foodPoints: remainingFoodPoints, legLength: grownLegLength}),
+					_1: _elm_lang$core$Platform_Cmd$none
+				};
 		}
 	});
-var _netzwerg$elm_spider$Main$InitSeed = function (a) {
-	return {ctor: 'InitSeed', _0: a};
+var _netzwerg$elm_spider$Main$RandomPoints = function (a) {
+	return {ctor: 'RandomPoints', _0: a};
 };
 var _netzwerg$elm_spider$Main$MousePosition = function (a) {
 	return {ctor: 'MousePosition', _0: a};
@@ -9659,18 +9810,30 @@ var _netzwerg$elm_spider$Main$Resize = function (a) {
 var _netzwerg$elm_spider$Main$init = {
 	ctor: '_Tuple2',
 	_0: {
-		seed: 0,
 		screen: A2(_netzwerg$elm_spider$Main$Dimension, 0, 0),
 		spiderCenter: A2(_netzwerg$elm_spider$Main$Point, 0, 0),
-		legLength: _netzwerg$elm_spider$Main$defaultLegLength,
+		legLength: _netzwerg$elm_spider$Main$initialLegLength,
 		points: _elm_lang$core$Native_List.fromArray(
-			[])
+			[]),
+		foodPoints: _elm_lang$core$Native_List.fromArray(
+			[]),
+		poisonPoints: _elm_lang$core$Native_List.fromArray(
+			[]),
+		resetPoint: A2(_netzwerg$elm_spider$Main$Point, 0, 0)
 	},
 	_1: _elm_lang$core$Platform_Cmd$batch(
 		_elm_lang$core$Native_List.fromArray(
 			[
 				A3(_elm_lang$core$Task$perform, _netzwerg$elm_spider$Main$Resize, _netzwerg$elm_spider$Main$Resize, _elm_lang$window$Window$size),
-				A3(_elm_lang$core$Task$perform, _netzwerg$elm_spider$Main$InitSeed, _netzwerg$elm_spider$Main$InitSeed, _elm_lang$core$Time$now)
+				A2(
+				_elm_lang$core$Random$generate,
+				_netzwerg$elm_spider$Main$RandomPoints,
+				A2(_elm_lang$core$Random$list, _netzwerg$elm_spider$Main$pointCount, _netzwerg$elm_spider$Main$randomPoint)),
+				_netzwerg$elm_spider$Main$randomFoodPointsCmd,
+				A2(
+				_elm_lang$core$Random$generate,
+				_netzwerg$elm_spider$Main$RandomPoisonPoints,
+				A2(_elm_lang$core$Random$list, _netzwerg$elm_spider$Main$poisonPointCount, _netzwerg$elm_spider$Main$randomPoint))
 			]))
 };
 var _netzwerg$elm_spider$Main$subscriptions = _elm_lang$core$Platform_Sub$batch(
@@ -9679,13 +9842,13 @@ var _netzwerg$elm_spider$Main$subscriptions = _elm_lang$core$Platform_Sub$batch(
 			_elm_lang$window$Window$resizes(_netzwerg$elm_spider$Main$Resize),
 			_elm_lang$keyboard$Keyboard$downs(_netzwerg$elm_spider$Main$KeyDown),
 			_elm_lang$mouse$Mouse$moves(
-			function (_p6) {
-				var _p7 = _p6;
+			function (_p8) {
+				var _p9 = _p8;
 				return _netzwerg$elm_spider$Main$MousePosition(
 					A2(
 						_netzwerg$elm_spider$Main$Point,
-						_elm_lang$core$Basics$toFloat(_p7.x),
-						_elm_lang$core$Basics$toFloat(_p7.y)));
+						_elm_lang$core$Basics$toFloat(_p9.x),
+						_elm_lang$core$Basics$toFloat(_p9.y)));
 			})
 		]));
 var _netzwerg$elm_spider$Main$main = {

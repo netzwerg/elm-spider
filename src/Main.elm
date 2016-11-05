@@ -54,6 +54,11 @@ hexOrange =
     "#F0AD00"
 
 
+hexGreen : String
+hexGreen =
+    "#8AE234"
+
+
 hexBlue : String
 hexBlue =
     "#60B5CC"
@@ -109,6 +114,11 @@ poisonPointRadius =
     15
 
 
+resetPointRadius : Float
+resetPointRadius =
+    20
+
+
 
 -- MSG
 
@@ -120,7 +130,10 @@ type Msg
     | RandomPoints (List Point)
     | RandomFoodPoints (List Point)
     | RandomPoisonPoints (List Point)
-    | DetectCollisions
+    | DetectResetCollision
+    | Reset
+    | DetectPoisonCollision
+    | DetectFoodCollision
 
 
 
@@ -134,6 +147,7 @@ type alias Model =
     , points : List Point
     , foodPoints : List Point
     , poisonPoints : List Point
+    , resetPoint : Point
     }
 
 
@@ -153,14 +167,20 @@ init =
       , points = []
       , foodPoints = []
       , poisonPoints = []
+      , resetPoint = Point 0 0
       }
     , Cmd.batch
         [ Task.perform Resize Resize Window.size
         , Random.generate RandomPoints (list pointCount randomPoint)
-        , Random.generate RandomFoodPoints (list foodPointCount randomPoint)
+        , randomFoodPointsCmd
         , Random.generate RandomPoisonPoints (list poisonPointCount randomPoint)
         ]
     )
+
+
+randomFoodPointsCmd : Cmd Msg
+randomFoodPointsCmd =
+    Random.generate RandomFoodPoints (list foodPointCount randomPoint)
 
 
 randomPoint : Generator Point
@@ -196,12 +216,12 @@ update msg model =
 
         RandomFoodPoints foodPoints ->
             ( { model | foodPoints = foodPoints }
-            , detectCollisions
+            , detectCollisionsCmd
             )
 
         RandomPoisonPoints poisonPoints ->
             ( { model | poisonPoints = poisonPoints }
-            , detectCollisions
+            , detectCollisionsCmd
             )
 
         Resize s ->
@@ -218,30 +238,49 @@ update msg model =
                 ( { model
                     | screen = screen
                     , spiderCenter = Point (w / 2) (h / 2)
+                    , resetPoint = Point 0.95 (w * 0.05 / h)
                   }
-                , detectCollisions
+                , detectCollisionsCmd
                 )
 
         KeyDown keyCode ->
-            ( keyDown keyCode model
-            , detectCollisions
-            )
+            keyDown keyCode model
 
         MousePosition mousePosition ->
             ( { model | spiderCenter = mousePosition }
-            , detectCollisions
+            , detectCollisionsCmd
             )
 
-        DetectCollisions ->
+        DetectResetCollision ->
+            let
+                reset =
+                    collidingWithSpider model.spiderCenter model.resetPoint model.screen
+            in
+                if reset then
+                    ( model, cmdFromMsg Reset )
+                else
+                    ( model, Cmd.none )
+
+        Reset ->
+            ( { model | legLength = initialLegLength }, randomFoodPointsCmd )
+
+        DetectPoisonCollision ->
             let
                 colliding =
                     (\p -> collidingWithSpider model.spiderCenter p model.screen)
 
-                notColliding =
-                    (\p -> not (collidingWithSpider model.spiderCenter p model.screen))
-
                 poisoned =
                     List.any colliding model.poisonPoints
+            in
+                if poisoned then
+                    ( { model | legLength = initialLegLength }, Cmd.none )
+                else
+                    ( model, Cmd.none )
+
+        DetectFoodCollision ->
+            let
+                notColliding =
+                    (\p -> not (collidingWithSpider model.spiderCenter p model.screen))
 
                 remainingFoodPoints =
                     List.filter notColliding model.foodPoints
@@ -249,23 +288,29 @@ update msg model =
                 eatenPointCount =
                     (List.length model.foodPoints) - (List.length remainingFoodPoints)
 
-                newLegLength =
+                grownLegLength =
                     (legGrowthFactor ^ (toFloat eatenPointCount)) * model.legLength
             in
-                if poisoned then
-                    ( { model | legLength = initialLegLength }, Cmd.none )
-                else
-                    ( { model
-                        | foodPoints = remainingFoodPoints
-                        , legLength = newLegLength
-                      }
-                    , Cmd.none
-                    )
+                ( { model
+                    | foodPoints = remainingFoodPoints
+                    , legLength = grownLegLength
+                  }
+                , Cmd.none
+                )
 
 
-detectCollisions : Cmd Msg
-detectCollisions =
-    Task.perform identity identity (Task.succeed DetectCollisions)
+detectCollisionsCmd : Cmd Msg
+detectCollisionsCmd =
+    Cmd.batch
+        [ cmdFromMsg DetectResetCollision
+        , cmdFromMsg DetectPoisonCollision
+        , cmdFromMsg DetectFoodCollision
+        ]
+
+
+cmdFromMsg : Msg -> Cmd Msg
+cmdFromMsg msg =
+    Task.perform identity identity (Task.succeed msg)
 
 
 collidingWithSpider : Point -> Point -> Dimension -> Bool
@@ -274,11 +319,11 @@ collidingWithSpider spiderCenter point screen =
         ( x1, y1 ) =
             ( spiderCenter.x, spiderCenter.y )
 
-        foodPoint =
+        scaledPoint =
             scaleToScreen screen point
 
         ( x2, y2 ) =
-            ( foodPoint.x, foodPoint.y )
+            ( scaledPoint.x, scaledPoint.y )
 
         a =
             (x1 - x2)
@@ -292,7 +337,7 @@ collidingWithSpider spiderCenter point screen =
         a * a + b * b < c * c
 
 
-keyDown : KeyCode -> Model -> Model
+keyDown : KeyCode -> Model -> ( Model, Cmd Msg )
 keyDown keyCode model =
     let
         w =
@@ -330,8 +375,17 @@ keyDown keyCode model =
 
                 _ ->
                     Point x y
+
+        cmd =
+            case keyCode of
+                -- space
+                32 ->
+                    cmdFromMsg Reset
+
+                _ ->
+                    Cmd.none
     in
-        { model | spiderCenter = spiderCenter }
+        ( { model | spiderCenter = spiderCenter }, Cmd.batch [ cmd, detectCollisionsCmd ] )
 
 
 
@@ -355,6 +409,9 @@ view model =
 
         poisonPoints =
             List.map (scaleToScreen model.screen) model.poisonPoints
+
+        scaledResetPoint =
+            scaleToScreen model.screen model.resetPoint
     in
         svg
             [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
@@ -367,6 +424,7 @@ view model =
             , viewPoints points
             , viewFoodPoints foodPoints
             , viewPoisonPoints poisonPoints
+            , viewResetPoint scaledResetPoint
             , viewSpiderLegs model.spiderCenter model.legLength points
             , viewSpiderCenter model.spiderCenter
             ]
@@ -400,6 +458,11 @@ viewFoodPoints points =
 viewPoisonPoints : List Point -> Svg msg
 viewPoisonPoints points =
     g [] (List.map (\p -> viewPoint p hexOrange poisonPointRadius) points)
+
+
+viewResetPoint : Point -> Svg msg
+viewResetPoint point =
+    viewPoint point hexGreen resetPointRadius
 
 
 viewPoint : Point -> String -> Float -> Svg msg
