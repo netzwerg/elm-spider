@@ -570,7 +570,7 @@ viewTimer model =
         (timerText, color) =
             case model.timer of
                 Idle ->
-                    ("Ready", hexWhite)
+                    ("Hungry For Blue", hexBlue)
 
                 Started startTime ->
                     (timeToString (model.time - startTime), hexWhite)
