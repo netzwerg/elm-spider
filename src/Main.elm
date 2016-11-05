@@ -17,12 +17,31 @@ import String exposing (concat)
 import Time exposing (..)
 
 
+-- MAIN
+
+
+main : Program Never
+main =
+    program
+        { init = init
+        , update = update
+        , subscriptions = always <| subscriptions
+        , view = view
+        }
+
+
+
 -- CONFIG
 
 
-elmOrange : String
-elmOrange =
+hexOrange : String
+hexOrange =
     "#F0AD00"
+
+
+hexBlue : String
+hexBlue =
+    "#60B5CC"
 
 
 pointCount : Int
@@ -40,14 +59,29 @@ pixelsPerArrowPress =
     10
 
 
-defaultLegLength : Float
-defaultLegLength =
+initialLegLength : Float
+initialLegLength =
     100
 
 
 legWidth : Float
 legWidth =
     5
+
+
+legGrowthFactor : Float
+legGrowthFactor =
+    1.2
+
+
+foodPointCount : Int
+foodPointCount =
+    10
+
+
+foodPointRadius : Float
+foodPointRadius =
+    15
 
 
 
@@ -58,8 +92,9 @@ type Msg
     = Resize Size
     | KeyDown KeyCode
     | MousePosition Point
-    | InitSeed Time
-    | InitPoints
+    | RandomPoints (List Point)
+    | RandomFoodPoints (List Point)
+    | DetectCollisions
 
 
 
@@ -67,11 +102,11 @@ type Msg
 
 
 type alias Model =
-    { seed : Int
-    , screen : Dimension
+    { screen : Dimension
     , spiderCenter : Point
     , legLength : Float
     , points : List Point
+    , foodPoints : List Point
     }
 
 
@@ -83,38 +118,20 @@ type alias Dimension =
     { width : Float, height : Float }
 
 
-main : Program Never
-main =
-    program
-        { init = init
-        , update = update
-        , subscriptions = always <| subscriptions
-        , view = view
-        }
-
-
 init : ( Model, Cmd Msg )
 init =
-    ( { seed = 0
-      , screen = Dimension 0 0
+    ( { screen = Dimension 0 0
       , spiderCenter = Point 0 0
-      , legLength = defaultLegLength
+      , legLength = initialLegLength
       , points = []
+      , foodPoints = []
       }
     , Cmd.batch
         [ Task.perform Resize Resize Window.size
-        , Task.perform InitSeed InitSeed Time.now
+        , Random.generate RandomPoints (list pointCount randomPoint)
+        , Random.generate RandomFoodPoints (list foodPointCount randomPoint)
         ]
     )
-
-
-randomPoints : Int -> List Point
-randomPoints seed =
-    let
-        ( points, _ ) =
-            step (list pointCount randomPoint) (initialSeed seed)
-    in
-        points
 
 
 randomPoint : Generator Point
@@ -143,16 +160,14 @@ subscriptions =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        InitSeed seed ->
-            let
-                model' =
-                    { model | seed = round seed }
-            in
-                update InitPoints model'
-
-        InitPoints ->
-            ( { model | points = randomPoints model.seed }
+        RandomPoints points ->
+            ( { model | points = points }
             , Cmd.none
+            )
+
+        RandomFoodPoints foodPoints ->
+            ( { model | foodPoints = foodPoints }
+            , detectCollisions
             )
 
         Resize s ->
@@ -170,18 +185,68 @@ update msg model =
                     | screen = screen
                     , spiderCenter = Point (w / 2) (h / 2)
                   }
-                , Cmd.none
+                , detectCollisions
                 )
 
         KeyDown keyCode ->
             ( keyDown keyCode model
-            , Cmd.none
+            , detectCollisions
             )
 
         MousePosition mousePosition ->
             ( { model | spiderCenter = mousePosition }
-            , Cmd.none
+            , detectCollisions
             )
+
+        DetectCollisions ->
+            let
+                notEaten =
+                    (\p -> not (collidingWithSpider model.spiderCenter p model.screen))
+
+                remainingFoodPoints =
+                    List.filter notEaten model.foodPoints
+
+                eatenPointCount =
+                    (List.length model.foodPoints) - (List.length remainingFoodPoints)
+
+                grownLegLength =
+                    (legGrowthFactor ^ (toFloat eatenPointCount)) * model.legLength
+            in
+                ( { model
+                    | foodPoints = remainingFoodPoints
+                    , legLength = grownLegLength
+                  }
+                , Cmd.none
+                )
+
+
+detectCollisions : Cmd Msg
+detectCollisions =
+    Task.perform identity identity (Task.succeed DetectCollisions)
+
+
+collidingWithSpider : Point -> Point -> Dimension -> Bool
+collidingWithSpider spiderCenter point screen =
+    let
+        ( x1, y1 ) =
+            ( spiderCenter.x, spiderCenter.y )
+
+        foodPoint =
+            scaleToScreen screen point
+
+        ( x2, y2 ) =
+            ( foodPoint.x, foodPoint.y )
+
+        a =
+            (x1 - x2)
+
+        b =
+            (y1 - y2)
+
+        c =
+            pointRadius + foodPointRadius
+    in
+        a * a + b * b < c * c
 
 
 keyDown : KeyCode -> Model -> Model
@@ -241,6 +306,9 @@ view model =
 
         points =
             List.map (scaleToScreen model.screen) model.points
+
+        foodPoints =
+            List.map (scaleToScreen model.screen) model.foodPoints
     in
         svg
             [ viewBox (concat [ "0 0 ", toString w, " ", toString h ])
@@ -250,6 +318,7 @@ view model =
             , style "display: block"
             ]
             [ viewPoints points
+            , viewFoodPoints foodPoints
             , viewSpiderCenter model.spiderCenter
             , viewSpiderLegs model.spiderCenter model.legLength points
             ]
@@ -262,20 +331,25 @@ scaleToScreen screen point =
 
 viewSpiderCenter : Point -> Svg msg
 viewSpiderCenter spiderCenter =
-    viewPoint spiderCenter elmOrange
+    viewPoint spiderCenter hexOrange pointRadius
 
 
 viewPoints : List Point -> Svg msg
 viewPoints points =
-    g [] (List.map (flip viewPoint "black") points)
+    g [] (List.map (\p -> viewPoint p "black" pointRadius) points)
 
 
-viewPoint : Point -> String -> Svg msg
-viewPoint point color =
+viewFoodPoints : List Point -> Svg msg
+viewFoodPoints points =
+    g [] (List.map (\p -> viewPoint p hexBlue foodPointRadius) points)
+
+
+viewPoint : Point -> String -> Float -> Svg msg
+viewPoint point color radius =
     circle
         [ cx (toString point.x)
         , cy (toString point.y)
-        , r (toString pointRadius)
+        , r (toString radius)
         , fill color
         ]
         []
@@ -309,7 +383,7 @@ viewSpiderLeg spiderCenter legEnd =
         , y1 (toString spiderCenter.y)
         , x2 (toString legEnd.x)
         , y2 (toString legEnd.y)
-        , stroke elmOrange
+        , stroke hexOrange
         , strokeWidth (toString legWidth)
         , strokeLinecap "round"
         ]
